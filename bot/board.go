@@ -91,27 +91,38 @@ func setMove(move, player int) bool {
 	return true
 }
 
-func winCheck(player int, b [5][5]int) bool {
-	w := false
+func winCheck(b [5][5]int) (bool, int) {
 	for i := range 28 {
-		if b[win[i][0][0]][win[i][0][1]] == player &&
-			b[win[i][1][0]][win[i][1][1]] == player &&
-			b[win[i][2][0]][win[i][2][1]] == player &&
-			b[win[i][3][0]][win[i][3][1]] == player {
-			w = true
+		val := b[win[i][0][0]][win[i][0][1]]
+		if val != 0 &&
+			val == b[win[i][1][0]][win[i][1][1]] &&
+			val == b[win[i][2][0]][win[i][2][1]] &&
+			val == b[win[i][3][0]][win[i][3][1]] {
+			return true, val
 		}
 	}
-	return w
+	return false, 0
 }
 
-func loseCheck(player int, b [5][5]int) bool {
-	l := false
+func loseCheck(b [5][5]int) (bool, int) {
 	for i := range 48 {
-		if b[lose[i][0][0]][lose[i][0][1]] == player &&
-			b[lose[i][1][0]][lose[i][1][1]] == player &&
-			b[lose[i][2][0]][lose[i][2][1]] == player {
-			l = true
+		val := b[lose[i][0][0]][lose[i][0][1]]
+		if val != 0 &&
+			val == b[lose[i][1][0]][lose[i][1][1]] &&
+			val == b[lose[i][2][0]][lose[i][2][1]] {
+			return true, val
 		}
 	}
-	return l
+	return false, 0
+}
+
+func drawCheck(b [5][5]int) (bool, int) {
+	for i := 0; i < 5; i++ {
+		for j := 0; j < 5; j++ {
+			if b[i][j] == 0 {
+				return false, 0
+			}
+		}
+	}
+	return true, 0
 }
