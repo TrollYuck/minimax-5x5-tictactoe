@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"math"
+	"math/rand"
+	"time"
 )
 
 // node
@@ -12,39 +14,44 @@ type Node struct {
 }
 
 func getBestMove(board *[5][5]int, depth, player int) int {
-	var is_maxminizing bool //1 -> X maxing, 2 -> O mining
-	var best_move [2]int
+	var is_maxminizing bool // 1 -> X maxing, 2 -> O mining
+	var best_moves [][2]int
 	var best_eval, curr_eval, ret int
 	if player == 1 {
 		is_maxminizing = true
-		best_eval = -math.MaxInt8
+		best_eval = -math.MaxInt16
 	} else {
 		is_maxminizing = false
-		best_eval = math.MaxInt8
+		best_eval = math.MaxInt16
 	}
 	for _, move := range possibleMoves(*board) {
 		row, col := move[0], move[1]
 		board[row][col] = player
-		curr_eval = minimax(board, depth, -math.MaxInt8, math.MaxInt8, is_maxminizing)
+		curr_eval = minimax(board, depth-1, -math.MaxInt8, math.MaxInt8, is_maxminizing)
 		board[row][col] = 0
 
 		if is_maxminizing { // Current player is maximizing
 			if curr_eval > best_eval {
 				best_eval = curr_eval
-				best_move = move
+				best_moves = [][2]int{move}
+			} else if curr_eval == best_eval {
+				best_moves = append(best_moves, move)
 			}
 		} else { // Current player is minimizing
 			if curr_eval < best_eval {
 				best_eval = curr_eval
-				best_move = move
+				best_moves = [][2]int{move}
+			} else if curr_eval == best_eval {
+				best_moves = append(best_moves, move)
 			}
 		}
-
-		ret = (best_move[0]+1)*10 + best_move[1] + 1
-		fmt.Println(best_eval, " <-score | move ->", ret)
 	}
-	// Concatenate best_move[0] and best_move[1] as described
 
+	// Pick a random move from best_moves
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	chosen := best_moves[rng.Intn(len(best_moves))]
+	ret = (chosen[0]+1)*10 + chosen[1] + 1
+	fmt.Println(best_eval, " <-score | move ->", ret)
 	return ret
 }
 
@@ -119,17 +126,6 @@ func evaluateNode(board [5][5]int) int {
 
 	// Helper function to check line patterns
 	checkLine := func(line [5]int) {
-		// Block O from winning
-		for i := range 3 {
-			if line[i] == 2 && line[i+1] == 2 && line[i+2] == 2 {
-				score += 10 // Block O
-				patternFound = true
-			}
-			if line[i] == 1 && line[i+1] == 1 && line[i+2] == 1 {
-				score -= 10 // Block X
-				patternFound = true
-			}
-		}
 		// Two in a row
 		for i := range 4 {
 			if line[i] == 1 && line[i+1] == 1 {
@@ -163,25 +159,63 @@ func evaluateNode(board [5][5]int) int {
 				patternFound = true
 			}
 		}
-		// X X 0 X pattern
+		// X X 0 X / X 0 X X pattern
 		for i := range 2 {
 			if line[i] == 1 && line[i+1] == 1 && line[i+2] == 0 && line[i+3] == 1 {
-				score += 20
+				score += 350
 				patternFound = true
 			}
 			if line[i] == 2 && line[i+1] == 2 && line[i+2] == 0 && line[i+3] == 2 {
-				score -= 20
+				score -= 350
+				patternFound = true
+			}
+			if line[i] == 1 && line[i+1] == 0 && line[i+2] == 1 && line[i+3] == 1 {
+				score += 350
+				patternFound = true
+			}
+			if line[i] == 2 && line[i+1] == 0 && line[i+2] == 2 && line[i+3] == 2 {
+				score -= 350
 				patternFound = true
 			}
 		}
+
+		// Patterns where one player's piece splits/blocks three of the opponent's pieces
+		// This is for a 4-cell segment. Loop i from 0 to 1 for a 5-cell line.
+		// e.g. OOXO or OXOO
+		for i := 0; i <= len(line)-4; i++ {
+			// Player X (1) splits three of O's (2) pieces - good for X
+			// O O X O pattern: line[i]=O, line[i+1]=O, line[i+2]=X, line[i+3]=O
+			if line[i] == 2 && line[i+1] == 2 && line[i+2] == 1 && line[i+3] == 2 {
+				score += 400 // X (player 1) splits three O's
+				patternFound = true
+			}
+			// O X O O pattern: line[i]=O, line[i+1]=X, line[i+2]=O, line[i+3]=O
+			if line[i] == 2 && line[i+1] == 1 && line[i+2] == 2 && line[i+3] == 2 {
+				score += 400 // X (player 1) splits three O's
+				patternFound = true
+			}
+
+			// Player O (2) splits three of X's (1) pieces - bad for X (good for O)
+			// X X O X pattern: line[i]=X, line[i+1]=X, line[i+2]=O, line[i+3]=X
+			if line[i] == 1 && line[i+1] == 1 && line[i+2] == 2 && line[i+3] == 1 {
+				score -= 400 // O (player 2) splits three X's
+				patternFound = true
+			}
+			// X O X X pattern: line[i]=X, line[i+1]=O, line[i+2]=X, line[i+3]=X
+			if line[i] == 1 && line[i+1] == 2 && line[i+2] == 1 && line[i+3] == 1 {
+				score -= 400 // O (player 2) splits three X's
+				patternFound = true
+			}
+		}
+
 		// Strongly unfavor X 0 X 0 X pattern
 		if len(line) == 5 {
 			if line[0] == 1 && line[1] == 0 && line[2] == 1 && line[3] == 0 && line[4] == 1 {
-				score -= 50 // Strong penalty for X 0 X 0 X
+				score -= 300 // Strong penalty for X 0 X 0 X
 				patternFound = true
 			}
 			if line[0] == 2 && line[1] == 0 && line[2] == 2 && line[3] == 0 && line[4] == 2 {
-				score += 50 // Strong penalty for O 0 O 0 O (from X's perspective)
+				score += 300
 				patternFound = true
 			}
 		}
@@ -216,37 +250,85 @@ func evaluateNode(board [5][5]int) int {
 				count++
 			}
 		}
-		if count >= 2 {
-			checkLine(diag)
+		if count >= 2 { // Ensure the diagonal has at least 2 elements to form a line
+			var actualDiag [5]int
+			copy(actualDiag[:], diag[:count])
+			if count < 5 { // Pad with a value that won't match patterns if diag is short
+				for k := count; k < 5; k++ {
+					actualDiag[k] = 0
+				}
+			}
+			checkLine(actualDiag)
 		}
 	}
 
 	// Check anti-diagonals (top-right to bottom-left)
-	for d := 3; d <= 5; d++ {
+	for d := 3; d <= 5; d++ { // Adjusted loop bounds for 5x5, d represents sum i+j
+		// For a 5x5 board, relevant sums for anti-diagonals of length >= 2 are:
+		// Min sum for length 2: (0,1)-(1,0) -> sum 1. Max sum: (3,4)-(4,3) -> sum 7
+		// Let's adjust d to represent the main anti-diagonal (sum=4) and those around it.
+		// A common way is to iterate through starting points or lengths.
+		// The existing loop for d from 3 to 5 covers some, but might not be comprehensive or clear.
+		// Let's use a clearer diagonal iteration or ensure the current one is correct for 5x5.
+		// The current anti-diagonal logic might need review for full coverage of relevant lines.
+		// Assuming the existing diagonal logic is what you intend to keep for now:
 		var adiag [5]int
 		count := 0
-		for i := range 5 {
-			j := d - i
+		for i := range 5 { // row
+			j := d - i // col
 			if j >= 0 && j < 5 {
 				adiag[count] = board[i][j]
 				count++
 			}
 		}
-		if count >= 2 {
-			checkLine(adiag)
+		if count >= 2 { // Ensure the anti-diagonal has at least 2 elements
+			var actualAdiag [5]int
+			copy(actualAdiag[:], adiag[:count])
+			if count < 5 { // Pad if short
+				for k := count; k < 5; k++ {
+					actualAdiag[k] = 0 // Neutral value
+				}
+			}
+			checkLine(actualAdiag)
 		}
 	}
 
-	// Base case: no pattern found
-	if !patternFound {
-		return 1
-	}
+	if patternFound {
+		return score
+	} else {
+		// No patterns found
+		positionalScore := 0
+		// These bonuses are small, to be influential mainly when no patterns are found.
+		// Central squares are generally more valuable.
+		centerBonuses := [5][5]int{
+			{0, 0, 1, 0, 0},
+			{0, 1, 2, 1, 0},
+			{1, 2, 3, 2, 1}, // Center (2,2) gets +3
+			{0, 1, 2, 1, 0},
+			{0, 0, 1, 0, 0},
+		}
 
-	return score
+		for r := range 5 {
+			for c := range 5 {
+				if board[r][c] == 1 { // Player X (maximizer)
+					positionalScore += centerBonuses[r][c]
+				} else if board[r][c] == 2 { // Player O (minimizer)
+					positionalScore -= centerBonuses[r][c]
+				}
+			}
+		}
+
+		// If positionalScore is 0 (e.g., empty board), return 1 to maintain
+		// a small default evaluation for neutral, pattern-less states.
+		if positionalScore == 0 {
+			return 1
+		}
+		return positionalScore
+	}
 }
 
 func isGameOver(board [5][5]int) (bool, int) {
-	//TODO : implement game end check
+
 	game_over, p := drawCheck(board)
 
 	if game_over {
@@ -256,18 +338,18 @@ func isGameOver(board [5][5]int) (bool, int) {
 	game_over, p = winCheck(board)
 	if game_over {
 		if p == 1 {
-			return true, 100
+			return true, 1000
 		} else {
-			return true, -100
+			return true, -1000
 		}
 	}
 
 	game_over, p = loseCheck(board)
 	if game_over {
 		if p == 1 {
-			return true, -100
+			return true, -1000
 		} else {
-			return true, 100
+			return true, 1000
 		}
 	}
 	return false, 0
