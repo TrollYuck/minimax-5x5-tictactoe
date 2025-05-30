@@ -24,10 +24,28 @@ func getBestMove(board *[5][5]int, depth, player int) int {
 		is_maxminizing = false
 		best_eval = math.MaxInt16
 	}
-	for _, move := range possibleMoves(*board) {
+
+	posMoves := possibleMoves(*board)
+
+	if m, ok := immediateWin(board, posMoves, player); ok {
+		fmt.Println("Immediate Win on: ", (m[0]+1)*10+m[1]+1)
+		return (m[0]+1)*10 + m[1] + 1
+	}
+
+	opp := 3 - player
+	cp_board := board
+	m, opp_win := immediateWin(board, posMoves, opp)
+	cp_board[m[0]][m[1]] = player
+	p_lose, _ := loseCheck(*cp_board)
+	if opp_win && !(p_lose) {
+		fmt.Println("Immediate Win BLOCKED on: ", (m[0]+1)*10+m[1]+1)
+		return (m[0]+1)*10 + m[1] + 1
+	}
+
+	for _, move := range posMoves {
 		row, col := move[0], move[1]
 		board[row][col] = player
-		curr_eval = minimax(board, depth-1, -math.MaxInt8, math.MaxInt8, is_maxminizing)
+		curr_eval = minimax(board, depth-1, -math.MaxInt16, math.MaxInt16, is_maxminizing)
 		board[row][col] = 0
 
 		if is_maxminizing { // Current player is maximizing
@@ -67,9 +85,10 @@ func minimax(board *[5][5]int, depth, alpha, beta int, is_maxminizing bool) int 
 		return evaluateNode(*board)
 	}
 
+	moves := possibleMoves(*board)
+
 	if is_maxminizing {
 		max_eval = -math.MaxInt8
-		moves := possibleMoves(*board)
 		for _, move := range moves {
 			row, col := move[0], move[1]
 			// fmt.Println(row, " <r c> ", col, " max")
@@ -87,7 +106,6 @@ func minimax(board *[5][5]int, depth, alpha, beta int, is_maxminizing bool) int 
 		return max_eval
 	} else {
 		min_eval = math.MaxInt8
-		moves := possibleMoves(*board)
 		for _, move := range moves {
 			row, col := move[0], move[1]
 
@@ -239,57 +257,25 @@ func evaluateNode(board [5][5]int) int {
 		checkLine(col)
 	}
 
-	// Check diagonals (top-left to bottom-right)
-	for d := -1; d <= 1; d++ {
-		var diag [5]int
-		count := 0
-		for i := range 5 {
-			j := i + d
-			if j >= 0 && j < 5 {
-				diag[count] = board[i][j]
-				count++
+	// Diagonals (top-left to bottom-right)
+	for r := 0; r <= 1; r++ {
+		for c := 0; c <= 1; c++ {
+			var diag [5]int
+			for i := 0; i < 5 && r+i < 5 && c+i < 5; i++ {
+				diag[i] = board[r+i][c+i]
 			}
-		}
-		if count >= 2 { // Ensure the diagonal has at least 2 elements to form a line
-			var actualDiag [5]int
-			copy(actualDiag[:], diag[:count])
-			if count < 5 { // Pad with a value that won't match patterns if diag is short
-				for k := count; k < 5; k++ {
-					actualDiag[k] = 0
-				}
-			}
-			checkLine(actualDiag)
+			checkLine(diag)
 		}
 	}
 
-	// Check anti-diagonals (top-right to bottom-left)
-	for d := 3; d <= 5; d++ { // Adjusted loop bounds for 5x5, d represents sum i+j
-		// For a 5x5 board, relevant sums for anti-diagonals of length >= 2 are:
-		// Min sum for length 2: (0,1)-(1,0) -> sum 1. Max sum: (3,4)-(4,3) -> sum 7
-		// Let's adjust d to represent the main anti-diagonal (sum=4) and those around it.
-		// A common way is to iterate through starting points or lengths.
-		// The existing loop for d from 3 to 5 covers some, but might not be comprehensive or clear.
-		// Let's use a clearer diagonal iteration or ensure the current one is correct for 5x5.
-		// The current anti-diagonal logic might need review for full coverage of relevant lines.
-		// Assuming the existing diagonal logic is what you intend to keep for now:
-		var adiag [5]int
-		count := 0
-		for i := range 5 { // row
-			j := d - i // col
-			if j >= 0 && j < 5 {
-				adiag[count] = board[i][j]
-				count++
+	// Anti-diagonals (top-right to bottom-left)
+	for r := 0; r <= 1; r++ {
+		for c := 4; c >= 3; c-- {
+			var adiag [5]int
+			for i := 0; i < 5 && r+i < 5 && c-i >= 0; i++ {
+				adiag[i] = board[r+i][c-i]
 			}
-		}
-		if count >= 2 { // Ensure the anti-diagonal has at least 2 elements
-			var actualAdiag [5]int
-			copy(actualAdiag[:], adiag[:count])
-			if count < 5 { // Pad if short
-				for k := count; k < 5; k++ {
-					actualAdiag[k] = 0 // Neutral value
-				}
-			}
-			checkLine(actualAdiag)
+			checkLine(adiag)
 		}
 	}
 
@@ -303,7 +289,7 @@ func evaluateNode(board [5][5]int) int {
 		centerBonuses := [5][5]int{
 			{0, 0, 1, 0, 0},
 			{0, 1, 2, 1, 0},
-			{1, 2, 3, 2, 1}, // Center (2,2) gets +3
+			{1, 2, 3, 2, 1},
 			{0, 1, 2, 1, 0},
 			{0, 0, 1, 0, 0},
 		}
@@ -353,4 +339,17 @@ func isGameOver(board [5][5]int) (bool, int) {
 		}
 	}
 	return false, 0
+}
+
+func immediateWin(board *[5][5]int, posMoves [][2]int, player int) (move [2]int, ok bool) {
+	for _, m := range posMoves {
+		r, c := m[0], m[1]
+		board[r][c] = player
+		win, _ := winCheck(*board)
+		board[r][c] = 0
+		if win {
+			return m, true
+		}
+	}
+	return [2]int{}, false
 }
