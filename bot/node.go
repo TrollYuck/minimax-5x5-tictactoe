@@ -7,12 +7,6 @@ import (
 	"time"
 )
 
-// node
-type Node struct {
-	state [5][5]int
-	eval  int
-}
-
 func getBestMove(board *[5][5]int, depth, player int) int {
 	var is_maxminizing bool // 1 -> X maxing, 2 -> O mining
 	var best_moves [][2]int
@@ -33,10 +27,10 @@ func getBestMove(board *[5][5]int, depth, player int) int {
 	}
 
 	opp := 3 - player
-	cp_board := board
+	cp_board := *board
 	m, opp_win := immediateWin(board, posMoves, opp)
 	cp_board[m[0]][m[1]] = player
-	p_lose, _ := loseCheck(*cp_board)
+	p_lose, _ := loseCheck(cp_board)
 	if opp_win && !(p_lose) {
 		fmt.Println("Immediate Win BLOCKED on: ", (m[0]+1)*10+m[1]+1)
 		return (m[0]+1)*10 + m[1] + 1
@@ -88,7 +82,7 @@ func minimax(board *[5][5]int, depth, alpha, beta int, is_maxminizing bool) int 
 	moves := possibleMoves(*board)
 
 	if is_maxminizing {
-		max_eval = -math.MaxInt8
+		max_eval = -math.MaxInt16
 		for _, move := range moves {
 			row, col := move[0], move[1]
 			// fmt.Println(row, " <r c> ", col, " max")
@@ -105,7 +99,7 @@ func minimax(board *[5][5]int, depth, alpha, beta int, is_maxminizing bool) int 
 		}
 		return max_eval
 	} else {
-		min_eval = math.MaxInt8
+		min_eval = math.MaxInt16
 		for _, move := range moves {
 			row, col := move[0], move[1]
 
@@ -197,9 +191,6 @@ func evaluateNode(board [5][5]int) int {
 			}
 		}
 
-		// Patterns where one player's piece splits/blocks three of the opponent's pieces
-		// This is for a 4-cell segment. Loop i from 0 to 1 for a 5-cell line.
-		// e.g. OOXO or OXOO
 		for i := 0; i <= len(line)-4; i++ {
 			// Player X (1) splits three of O's (2) pieces - good for X
 			// O O X O pattern: line[i]=O, line[i+1]=O, line[i+2]=X, line[i+3]=O
@@ -229,7 +220,7 @@ func evaluateNode(board [5][5]int) int {
 		// Strongly unfavor X 0 X 0 X pattern
 		if len(line) == 5 {
 			if line[0] == 1 && line[1] == 0 && line[2] == 1 && line[3] == 0 && line[4] == 1 {
-				score -= 300 // Strong penalty for X 0 X 0 X
+				score -= 300
 				patternFound = true
 			}
 			if line[0] == 2 && line[1] == 0 && line[2] == 2 && line[3] == 0 && line[4] == 2 {
@@ -284,8 +275,6 @@ func evaluateNode(board [5][5]int) int {
 	} else {
 		// No patterns found
 		positionalScore := 0
-		// These bonuses are small, to be influential mainly when no patterns are found.
-		// Central squares are generally more valuable.
 		centerBonuses := [5][5]int{
 			{0, 0, 1, 0, 0},
 			{0, 1, 2, 1, 0},
@@ -304,11 +293,6 @@ func evaluateNode(board [5][5]int) int {
 			}
 		}
 
-		// If positionalScore is 0 (e.g., empty board), return 1 to maintain
-		// a small default evaluation for neutral, pattern-less states.
-		if positionalScore == 0 {
-			return 1
-		}
 		return positionalScore
 	}
 }
